@@ -36,9 +36,10 @@ export function CoinFlip({ isWalletConnected, onFlip }: CoinFlipProps) {
       }, 1500);
     } catch (error) {
       setIsFlipping(false);
+      console.log(error)
       toast({
         title: "Error",
-        description: "Something went wrong while flipping the coin",
+        description: `Something went wrong while flipping the coin `,
         variant: "destructive",
       });
     }

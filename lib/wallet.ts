@@ -1,10 +1,15 @@
 import { MANTLE_CHAIN_CONFIG, MANTLE_CHAIN_ID } from "./constants";
+import { BrowserProvider, ethers } from 'ethers';
+
+import tokenABI from "@/contractInfo/abi.json"; // Import your custom token ABI
+const tokenAddress = "0xFdd0aB6034564D942dE78CF67C86956fF047Cc1E"; // Replace with your custom token contract address
 
 declare global {
   interface Window {
     ethereum?: any;
   }
 }
+
 
 export async function connectWallet(): Promise<{ address: string; balance: string }> {
   if (!window.ethereum) {
@@ -13,8 +18,8 @@ export async function connectWallet(): Promise<{ address: string; balance: strin
 
   try {
     // Request account access
-    const accounts = await window.ethereum.request({ 
-      method: "eth_requestAccounts" 
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts"
     });
 
     // Switch to Mantle network
@@ -34,7 +39,12 @@ export async function connectWallet(): Promise<{ address: string; balance: strin
         throw switchError;
       }
     }
-
+    //mint
+    const provider = new BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner()
+    const address = await signer.address;
+    const questContract = new ethers.Contract(tokenAddress, tokenABI.abi, signer)
+    await (await questContract.mint(address, ethers.parseUnits(parseInt("150").toString(), 18))).wait();
     // Get balance
     const balance = await window.ethereum.request({
       method: "eth_getBalance",
@@ -58,30 +68,76 @@ export async function flipCoin(amount: string): Promise<boolean> {
     throw new Error("Please install MetaMask to use this app");
   }
 
+
   try {
-    const accounts = await window.ethereum.request({ 
-      method: "eth_requestAccounts" 
+    // Request account access
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts"
     });
 
-    // Convert amount to wei
-    const amountInWei = (parseFloat(amount) * 1e18).toString(16);
+    // Set up the provider and signer using ethers.js
+    const provider = new BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
 
-    // Send transaction
-    await window.ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: accounts[0],
-        to: "0x0000000000000000000000000000000000000000", // Replace with your contract address
-        value: "0x" + amountInWei,
-      }],
-    });
+    // Create a contract instance
+    const tokenContract = new ethers.Contract(tokenAddress, tokenABI.abi, signer);
 
-    // For demo purposes, random result
-    // In production, this should be determined by the smart contract
-    return Math.random() > 0.5;
+    // Convert amount to token's smallest unit (e.g., wei for ETH, or your token's decimals)
+    const amountInTokens = ethers.parseUnits(amount, 18); // Assuming 18 decimals for the token
+
+    // Send token transaction (this could be an entry fee if you want to take tokens)
+    const transaction = await tokenContract.transfer(
+      "0xe1b3df92a983bD27c4798867A1F425B3fA7c71a8", // Replace with your contract address
+      amountInTokens
+    );
+
+    // Wait for the transaction to be mined
+    await transaction.wait();
+
+    // For demo purposes, simulate coin flip result
+    const userWon = Math.random() > 0.5; // Simulate 50% chance win or loss
+
+    if (userWon) {
+      // Mint tokens if the user wins the coin flip
+      const mintAmount = ethers.parseUnits("10", 18); // Mint 10 tokens (adjust as needed)
+
+      // Call the mint function from your contract
+      const mintTransaction = await tokenContract.mint(accounts[0], mintAmount);
+
+      // Wait for the mint transaction to be mined
+      await mintTransaction.wait();
+
+      console.log(`User won! Minted ${mintAmount.toString()} tokens`);
+    }
+
+    return userWon;
   } catch (error: any) {
     throw new Error(error.message || "Failed to flip coin");
   }
+  // try {
+  //   const accounts = await window.ethereum.request({ 
+  //     method: "eth_requestAccounts" 
+  //   });
+
+  //   // Convert amount to wei
+  //   const amountInWei = (parseFloat(amount) * 1e18).toString(16);
+
+  //   // Send transaction
+  //   await window.ethereum.request({
+  //     method: "eth_sendTransaction",
+  //     params: [{
+  //       from: accounts[0],
+  //       to: "0x0000000000000000000000000000000000000000", // Replace with your contract address
+  //       value: "0x" + amountInWei,
+  //     }],
+  //   });
+
+  //   // For demo purposes, random result
+  //   // In production, this should be determined by the smart contract
+  //   return Math.random() > 0.5;
+  // } catch (error: any) {
+  //   throw new Error(error.message || "Failed to flip coin");
+  // }
 }
 
 // Listen for account changes
